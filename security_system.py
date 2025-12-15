@@ -1,9 +1,12 @@
 import time
 import threading
 from datetime import datetime
+import os
+import requests
 
-from gpiozero import MotionSensor, DistanceSensor
+from gpiozero import MotionSensor, DistanceSensor, LED
 from mfrc522 import SimpleMFRC522
+from flask import Flask, request, jsonify
 
 state = {
     "armed": True,
@@ -23,12 +26,17 @@ state = {
 PIR_PIN = 4
 ULTRA_TRIG = 23
 ULTRA_ECHO = 24
+LED_PIN = 17
 
 pir = MotionSensor(PIR_PIN)
 dist = DistanceSensor(trigger=ULTRA_TRIG, echo=ULTRA_ECHO, max_distance=4)
 rfid = SimpleMFRC522()
+led = LED(LED_PIN)
 
 _running = False
+
+ALERT_URL = os.getenv('alert_api', 'http://127.0.0.1:5000/api/alert')
+app = Flask(__name__)
 
 def trigger_alarm(reason):
     if not state["armed"]:
@@ -36,32 +44,52 @@ def trigger_alarm(reason):
 
     state["alarm"] = True
     state["alarm_reason"] = reason
-    state["alarm_since"] = datetime.utcnow().isoformat()
-
+    state["alarm_since"] = datetime.now(datetime.timezone.utc).isoformat()
+    led.on()
+    description = get_description(reason)
+    data = {
+        "time": state["alarm_since"],
+        "sensor": reason,
+        "description": description
+    }
+    try:
+        requests.post(ALERT_URL, json=data, timeout=5)
+    except Exception as e:
+        print(f"Failed to send alert: {e}")
 
 def reset_alarm():
     state["alarm"] = False
     state["alarm_reason"] = None
     state["alarm_since"] = None
+    led.off()
+
+
+def get_description(reason):
+    if "motion" in reason:
+        return "Motion detected"
+    elif "distance" in reason:
+        return "Front door"
+    else:
+        return reason
 
 
 def _thread_pir():
     while _running:
         pir.wait_for_motion()
         state["motion"] = True
-        state["motion_last"] = datetime.utcnow().isoformat()
+        state["motion_last"] = datetime.now(datetime.timezone.utc).isoformat()
         if state["armed"]:
             trigger_alarm("motion")
         
         pir.wait_for_no_motion()
         state["motion"] = False
-gi
+
 def _thread_ultrasonic():
     while _running:
         d = dist.distance * 100
         d = round(d, 1)
         state["distance_cm"] = d
-        state["distance_last"] = datetime.utcnow().isoformat()
+        state["distance_last"] = datetime.now(datetime.timezone.utc).isoformat()
 
         if state["armed"] and d <= state["distance_threshold"]:
             trigger_alarm(f"distance<{state['distance_threshold']}cm")
@@ -74,11 +102,24 @@ def _thread_rfid():
         try:
             tag, txt = rfid.read()
             state["rfid"] = tag
-            state["rfid_last"] = datetime.utcnow().isoformat()
+            state["rfid_last"] = datetime.now(datetime.timezone.utc).isoformat()
 
             # toggle armed state
-            state["armed"] = not state["armed"]
-            reset_alarm()
+            if state["alarm"]:
+                disarm()
+            else:
+                arm()
+
+            # send rfid info
+            data = {
+                "type": "rfid",
+                "time": state["rfid_last"],
+                "tag": "Grandma`s card"
+            }
+            try:
+                requests.post(ALERT_URL, json=data, timeout=5)
+            except Exception as e:
+                print(f"Failed to send RFID alert: {e}")
 
         except Exception:
             pass
@@ -87,7 +128,7 @@ def _thread_rfid():
 
 # api pt colegu
 def start_sensors():
-    """Pornește senzorii în thread-uri."""
+    """multi threaded sensors"""
     global _running
     _running = True
 
@@ -97,24 +138,60 @@ def start_sensors():
 
 
 def stop_sensors():
-    """Închide thread-urile."""
+    """close threads"""
     global _running
     _running = False
 
 
 def get_state():
-    """Returnează starea completă a sistemului."""
+    """return the global state"""
     return state
 
 
 def arm():
     state["armed"] = True
     reset_alarm()
+    data = {
+        "action": "arm",
+        "time": datetime.now(datetime.timezone.utc).isoformat()
+    }
+    try:
+        requests.post(ALERT_URL, json=data, timeout=5)
+    except Exception as e:
+        print(f"Failed to send arm alert: {e}")
 
 
 def disarm():
     state["armed"] = False
     reset_alarm()
+    data = {
+        "action": "disarm",
+        "time": datetime.now(datetime.timezone.utc).isoformat()
+    }
+    try:
+        requests.post(ALERT_URL, json=data, timeout=5)
+    except Exception as e:
+        print(f"Failed to send disarm alert: {e}")
+
+
+@app.route('/arm', methods=['POST'])
+def arm_endpoint():
+    arm()
+    return jsonify({"status": "armed"})
+
+@app.route('/disarm', methods=['POST'])
+def disarm_endpoint():
+    disarm()
+    return jsonify({"status": "disarmed"})
+
+@app.route('/reset', methods=['POST'])
+def reset_endpoint():
+    reset()
+    return jsonify({"message": "Alarm reset"})
+
+@app.route('/emergency', methods=['POST'])
+def emergency_endpoint():
+    reset()
 
 
 def reset():
@@ -124,6 +201,4 @@ def reset():
 # test local
 if __name__ == "__main__":
     start_sensors()
-    while True:
-        print(get_state())
-        time.sleep(1)
+    app.run(host='0.0.0.0', port=5000)
