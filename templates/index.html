@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Security System</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f5;padding:15px 15px 30px}
+        .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+        .stat-card{padding:20px 10px;border-radius:12px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.1);color:#fff}
+        .stat-card.total{background:linear-gradient(135deg,#667eea,#764ba2)}
+        .stat-card.intrusions{background:linear-gradient(135deg,#f093fb,#f5576c)}
+        .stat-card.rfid{background:linear-gradient(135deg,#4facfe,#00f2fe)}
+        .stat-label{font-size:.75em;opacity:.9;margin-bottom:8px;text-transform:uppercase;font-weight:600}
+        .stat-value{font-size:2em;font-weight:bold}
+        .controls{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
+        button{padding:15px;border:none;border-radius:12px;font-size:1em;font-weight:600;cursor:pointer;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,.1);color:#fff}
+        button:active{transform:scale(.98)}
+        .btn-refresh{background:#48bb78}
+        .btn-alarm{background:#ed8936}
+        .btn-alarm.active{background:#38a169;box-shadow:0 0 20px rgba(56,161,105,.5)}
+        .btn-deactivate{background:#e53e3e}
+        .btn-deactivate.inactive{background:#718096;box-shadow:0 0 20px rgba(113,128,150,.5)}
+        .section{background:#fff;border-radius:12px;padding:15px;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+        .section-title{font-size:1.1em;font-weight:600;margin-bottom:15px;display:flex;align-items:center;gap:8px}
+        .intrusions-title{color:#f5576c}
+        .rfid-title{color:#00f2fe}
+        .list-item{padding:12px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center}
+        .list-item:last-child{border-bottom:none}
+        .item-time{font-size:.85em;color:#666}
+        .item-name{font-weight:600;color:#333}
+        .item-badge{font-size:.9em;color:#00a8e8;font-weight:600}
+        .empty-message{text-align:center;padding:30px;color:#999;font-size:.9em}
+        .list-container{max-height:300px;overflow-y:auto}
+        .list-container::-webkit-scrollbar{width:4px}
+        .list-container::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px}
+    </style>
+</head>
+<body>
+    <div class="stats-grid">
+        <div class="stat-card total">
+            <div class="stat-label">Total</div>
+            <div class="stat-value" id="total">-</div>
+        </div>
+        <div class="stat-card intrusions">
+            <div class="stat-label">🚨 Intrusions</div>
+            <div class="stat-value" id="intrusions">-</div>
+        </div>
+        <div class="stat-card rfid">
+            <div class="stat-label">🔑 RFID</div>
+            <div class="stat-value" id="rfid">-</div>
+        </div>
+    </div>
+    <div class="controls">
+        <button class="btn-refresh" onclick="refresh()">🔄 Refresh</button>
+        <button class="btn-alarm" id="btn-alarm" onclick="toggleAlarm()">🔔 Activate Alarm</button>
+        <button class="btn-deactivate" id="btn-system" onclick="toggleSystem()">⛔ Deactivate System</button>
+    </div>
+    <div class="section">
+        <div class="section-title intrusions-title">🚨 Detected Intrusions</div>
+        <div class="list-container" id="intrusions-list"><div class="empty-message">Loading...</div></div>
+    </div>
+    <div class="section">
+        <div class="section-title rfid-title">🔑 RFID Access</div>
+        <div class="list-container" id="rfid-list"><div class="empty-message">Loading...</div></div>
+    </div>
+    <script>
+        const $=(id)=>document.getElementById(id);
+        let alarmOn=false,systemOn=true;
+
+        const updateList=(id,events,msg,hasBadge)=>{
+            const c=$(id);
+            c.innerHTML=events.length?events.map(e=>`<div class="list-item"><div><div class="item-name">${e.sensor_name}</div><div class="item-time">${e.timestamp}</div></div>${hasBadge?`<div class="item-badge">${e.card_name||'N/A'}</div>`:''}</div>`).join(''):`<div class="empty-message">${msg}</div>`;
+        };
+
+        const updateButtons=()=>{
+            const btnAlarm=$('btn-alarm');
+            const btnSystem=$('btn-system');
+            if(alarmOn){
+                btnAlarm.classList.add('active');
+                btnAlarm.innerHTML='✅ Alarm ON';
+            }else{
+                btnAlarm.classList.remove('active');
+                btnAlarm.innerHTML='🔔 Activate Alarm';
+            }
+            if(systemOn){
+                btnSystem.classList.remove('inactive');
+                btnSystem.innerHTML='⛔ Deactivate System';
+            }else{
+                btnSystem.classList.add('inactive');
+                btnSystem.innerHTML='✅ Activate System';
+            }
+        };
+
+        const loadStatus=()=>{
+            fetch('/api/status').then(r=>r.json()).then(data=>{
+                alarmOn=data.alarm_on;
+                systemOn=data.system_on;
+                updateButtons();
+            }).catch(e=>console.error('Status error:',e));
+        };
+
+        const toggleAlarm=()=>{
+            const newState=!alarmOn;
+            fetch('/api/alarm',{
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({active:newState})
+            }).then(r=>r.json()).then(data=>{
+                if(data.success){
+                    alarmOn=data.alarm_on;
+                    updateButtons();
+                    alert(data.message);
+                }
+            }).catch(e=>console.error('Alarm error:',e));
+        };
+
+        const toggleSystem=()=>{
+            const newState=!systemOn;
+            if(!newState&&!confirm('⚠️ Do you really want to deactivate the system?'))return;
+            fetch('/api/system',{
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({active:newState})
+            }).then(r=>r.json()).then(data=>{
+                if(data.success){
+                    systemOn=data.system_on;
+                    updateButtons();
+                    alert(data.message);
+                }
+            }).catch(e=>console.error('System error:',e));
+        };
+
+        const refresh=()=>{
+            Promise.all([
+                fetch('/api/stats').then(r=>r.json()),
+                fetch('/api/events?from=sensors').then(r=>r.json()),
+                fetch('/api/events?from=rfid').then(r=>r.json())
+            ]).then(([s,i,r])=>{
+                $('total').textContent=s.total_events||0;
+                $('intrusions').textContent=i.count||0;
+                $('rfid').textContent=r.count||0;
+                updateList('intrusions-list',i.events||[],'No intrusions detected',false);
+                updateList('rfid-list',r.events||[],'No RFID access',true);
+            }).catch(e=>console.error('Error:',e));
+            loadStatus();
+        };
+
+        document.addEventListener('DOMContentLoaded',()=>{refresh();setInterval(refresh,5000)});
+    </script>
+</body>
+</html>
