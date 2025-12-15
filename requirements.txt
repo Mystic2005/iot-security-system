@@ -1,0 +1,4 @@
+gpiozero
+mfrc522
+flask
+requests
