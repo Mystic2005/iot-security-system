@@ -8,7 +8,7 @@ from gpiozero import MotionSensor, DistanceSensor, LED
 from mfrc522 import SimpleMFRC522
 from flask import Flask, request, jsonify
 
-state = {
+state = {   
     "armed": True,
     "motion": False,
     "motion_last": None,
@@ -198,4 +198,4 @@ def emergency_endpoint():
 # test local
 if __name__ == "__main__":
     start_sensors()
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5001)
