@@ -1,4 +1,4 @@
-gpiozero
-mfrc522
+pyA20
+spidev
 flask
 requests

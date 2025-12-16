@@ -1,6 +1,6 @@
 import time
 import threading
-from datetime import datetime
+import datetime
 import os
 import requests
 
@@ -23,10 +23,10 @@ state = {
 }
 
 # senzori initializare
-PIR_PIN = 4
-ULTRA_TRIG = 23
-ULTRA_ECHO = 24
-LED_PIN = 17
+PIR_PIN = 6
+ULTRA_TRIG = 27
+ULTRA_ECHO = 17
+LED_PIN = 21
 
 pir = MotionSensor(PIR_PIN)
 dist = DistanceSensor(trigger=ULTRA_TRIG, echo=ULTRA_ECHO, max_distance=4)
@@ -44,7 +44,7 @@ def trigger_alarm(reason):
 
     state["alarm"] = True
     state["alarm_reason"] = reason
-    state["alarm_since"] = datetime.now(datetime.timezone.utc).isoformat()
+    state["alarm_since"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     led.on()
     description = get_description(reason)
     data = {
@@ -77,7 +77,7 @@ def _thread_pir():
     while _running:
         pir.wait_for_motion()
         state["motion"] = True
-        state["motion_last"] = datetime.now(datetime.timezone.utc).isoformat()
+        state["motion_last"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         if state["armed"]:
             trigger_alarm("motion")
         
@@ -89,7 +89,7 @@ def _thread_ultrasonic():
         d = dist.distance * 100
         d = round(d, 1)
         state["distance_cm"] = d
-        state["distance_last"] = datetime.now(datetime.timezone.utc).isoformat()
+        state["distance_last"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
         if state["armed"] and d <= state["distance_threshold"]:
             trigger_alarm(f"distance<{state['distance_threshold']}cm")
@@ -102,7 +102,7 @@ def _thread_rfid():
         try:
             tag, txt = rfid.read()
             state["rfid"] = tag
-            state["rfid_last"] = datetime.now(datetime.timezone.utc).isoformat()
+            state["rfid_last"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
             # toggle armed state
             if state["alarm"]:
@@ -153,7 +153,7 @@ def arm():
     reset_alarm()
     data = {
         "action": "arm",
-        "time": datetime.now(datetime.timezone.utc).isoformat()
+        "time": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     try:
         requests.post(ALERT_URL, json=data, timeout=5)
@@ -166,7 +166,7 @@ def disarm():
     reset_alarm()
     data = {
         "action": "disarm",
-        "time": datetime.now(datetime.timezone.utc).isoformat()
+        "time": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     try:
         requests.post(ALERT_URL, json=data, timeout=5)
@@ -186,16 +186,13 @@ def disarm_endpoint():
 
 @app.route('/reset', methods=['POST'])
 def reset_endpoint():
-    reset()
-    return jsonify({"message": "Alarm reset"})
+    reset_alarm()
+    return jsonify({"message": "alarm reset"})
 
 @app.route('/emergency', methods=['POST'])
 def emergency_endpoint():
-    reset()
-
-
-def reset():
-    reset_alarm()
+    trigger_alarm("emergency")
+    return jsonify({"status": "emergency_alarm"})
 
 
 # test local
