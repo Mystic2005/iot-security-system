@@ -50,9 +50,6 @@ def add_event_helper(data, event_type, required_fields):
         'from_source': event_type
     }
 
-    if 'card_name' in data:
-        event_params['card_name'] = data['card_name']
-
     event_id = db.add_event(**event_params)
 
     return success_response(
@@ -109,8 +106,7 @@ def add_alert_event():
         timestamp=timestamp,
         sensor_name=sensor_name,
         description=description,
-        from_source=from_source,
-        card_name=data.get('card_name')
+        from_source=from_source
     )
 
     return success_response(
@@ -160,6 +156,16 @@ def get_stats():
 
 @app.route('/api/status', methods=['GET'])
 def get_status():
+    # Synchronize with the actual security system state
+    try:
+        response = requests.get('http://127.0.0.1:5001/state', timeout=1)
+        if response.status_code == 200:
+            security_state = response.json()
+            system_state['system_on'] = security_state.get('armed', True)
+            system_state['alarm_on'] = security_state.get('alarm', False)
+    except Exception as e:
+        print(f"Failed to get state from security system: {e}")
+
     return success_response(data=system_state)
 
 
@@ -167,22 +173,32 @@ def get_status():
 def set_alarm():
     response = toggle_state('alarm_on', 'Alarm')
 
-    # Propagate to hardware
-    try:
-        # system_state is updated inside toggle_state, so we check the new state
-        if system_state['alarm_on']:
-            requests.post('http://127.0.0.1:5001/arm', timeout=1)
-        else:
-            requests.post('http://127.0.0.1:5001/disarm', timeout=1)
-    except Exception as e:
-        print(f"Failed to communicate with security system: {e}")
+    if response[1] == 200:
+        try:
+            if system_state['alarm_on']:
+                requests.post('http://127.0.0.1:5001/emergency', timeout=1)
+            else:
+                requests.post('http://127.0.0.1:5001/reset', timeout=1)
+        except Exception as e:
+            print(f"Failed to communicate with security system: {e}")
 
     return response
 
 
 @app.route('/api/system', methods=['POST'])
 def set_system():
-    return toggle_state('system_on', 'System')
+    response = toggle_state('system_on', 'System')
+
+    if response[1] == 200:
+        try:
+            if system_state['system_on']:
+                requests.post('http://127.0.0.1:5001/arm', timeout=1)
+            else:
+                requests.post('http://127.0.0.1:5001/disarm', timeout=1)
+        except Exception as e:
+            print(f"Failed to communicate with security system: {e}")
+
+    return response
 
 
 # ============================================================================

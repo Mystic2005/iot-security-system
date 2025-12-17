@@ -22,7 +22,6 @@ class Database:
                     sensor_name TEXT NOT NULL,
                     description TEXT,
                     "from" TEXT DEFAULT 'sensors',
-                    card_name TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -36,12 +35,12 @@ class Database:
         finally:
             conn.close()
 
-    def add_event(self, timestamp: str, sensor_name: str, description: str = None, from_source: str = 'sensors', card_name: str = None) -> int:
+    def add_event(self, timestamp: str, sensor_name: str, description: str = None, from_source: str = 'sensors') -> int:
         conn = self.get_connection()
         try:
             cursor = conn.execute(
-                'INSERT INTO events (timestamp, sensor_name, description, "from", card_name) VALUES (?, ?, ?, ?, ?)',
-                (timestamp, sensor_name, description, from_source, card_name)
+                'INSERT INTO events (timestamp, sensor_name, description, "from") VALUES (?, ?, ?, ?)',
+                (timestamp, sensor_name, description, from_source)
             )
             conn.commit()
             return cursor.lastrowid
@@ -54,23 +53,23 @@ class Database:
             if from_source:
                 if limit:
                     cursor = conn.execute(
-                        'SELECT timestamp, sensor_name, description, "from", card_name FROM events WHERE "from" = ? ORDER BY timestamp DESC LIMIT ?',
+                        'SELECT timestamp, sensor_name, description, "from" FROM events WHERE "from" = ? ORDER BY timestamp DESC LIMIT ?',
                         (from_source, limit)
                     )
                 else:
                     cursor = conn.execute(
-                        'SELECT timestamp, sensor_name, description, "from", card_name FROM events WHERE "from" = ? ORDER BY timestamp DESC',
+                        'SELECT timestamp, sensor_name, description, "from" FROM events WHERE "from" = ? ORDER BY timestamp DESC',
                         (from_source,)
                     )
             else:
                 if limit:
                     cursor = conn.execute(
-                        'SELECT timestamp, sensor_name, description, "from", card_name FROM events ORDER BY timestamp DESC LIMIT ?',
+                        'SELECT timestamp, sensor_name, description, "from" FROM events ORDER BY timestamp DESC LIMIT ?',
                         (limit,)
                     )
                 else:
                     cursor = conn.execute(
-                        'SELECT timestamp, sensor_name, description, "from", card_name FROM events ORDER BY timestamp DESC'
+                        'SELECT timestamp, sensor_name, description, "from" FROM events ORDER BY timestamp DESC'
                     )
 
             events = []
@@ -81,8 +80,6 @@ class Database:
                     'description': row['description'],
                     'from_source': row['from']
                 }
-                if row['card_name']:
-                    event['card_name'] = row['card_name']
                 events.append(event)
             return events
         finally:
@@ -93,12 +90,12 @@ class Database:
         try:
             if limit:
                 cursor = conn.execute(
-                    'SELECT timestamp, sensor_name, description, "from", card_name FROM events WHERE sensor_name = ? ORDER BY timestamp DESC LIMIT ?',
+                    'SELECT timestamp, sensor_name, description, "from" FROM events WHERE sensor_name = ? ORDER BY timestamp DESC LIMIT ?',
                     (sensor_name, limit)
                 )
             else:
                 cursor = conn.execute(
-                    'SELECT timestamp, sensor_name, description, "from", card_name FROM events WHERE sensor_name = ? ORDER BY timestamp DESC',
+                    'SELECT timestamp, sensor_name, description, "from" FROM events WHERE sensor_name = ? ORDER BY timestamp DESC',
                     (sensor_name,)
                 )
 
@@ -110,8 +107,6 @@ class Database:
                     'description': row['description'],
                     'from_source': row['from']
                 }
-                if row['card_name']:
-                    event['card_name'] = row['card_name']
                 events.append(event)
             return events
         finally:

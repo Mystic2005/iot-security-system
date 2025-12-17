@@ -39,6 +39,7 @@ ALERT_URL = os.getenv('alert_api', 'http://127.0.0.1:5000/api/alert')
 app = Flask(__name__)
 
 def trigger_alarm(reason):
+    print("Triggering alarm")
     if not state["armed"]:
         return
 
@@ -59,6 +60,7 @@ def trigger_alarm(reason):
         print(f"Failed to send alert: {e}")
 
 def reset_alarm():
+    print("Resetting alarm")
     state["alarm"] = False
     state["alarm_reason"] = None
     state["alarm_since"] = None
@@ -115,7 +117,8 @@ def _thread_rfid():
             data = {
                 "timestamp": state["rfid_last"],
                 "from_source": "rfid",
-                "card_name": "Grandma's card"
+                "sensor_name": "Grandma's card",
+                "description": "Card scanned"
             }
             try:
                 requests.post(ALERT_URL, json=data, timeout=5)
@@ -150,6 +153,7 @@ def get_state():
 
 
 def arm():
+    print("Arming system")
     state["armed"] = True
     reset_alarm()
     data = {
@@ -163,6 +167,7 @@ def arm():
 
 
 def disarm():
+    print("Disarming system")
     state["armed"] = False
     reset_alarm()
     data = {
@@ -195,9 +200,18 @@ def emergency_endpoint():
     trigger_alarm("emergency")
     return jsonify({"status": "emergency_alarm"})
 
+@app.route('/state', methods=['GET'])
+def state_endpoint():
+    return jsonify({
+        "armed": state["armed"],
+        "alarm": state["alarm"],
+        "alarm_reason": state["alarm_reason"],
+        "alarm_since": state["alarm_since"]
+    })
+
 
 # test local
 if __name__ == "__main__":
     start_sensors()
-    # For Raspberry Pi: change host to '0.0.0.0' for network access
-    app.run(host='127.0.0.1', port=5001, debug=False)
+    # app.run(host='127.0.0.1', port=5001, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=False)

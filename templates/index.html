@@ -69,7 +69,7 @@
         const $=(id)=>document.getElementById(id);
         let alarmOn=false,systemOn=true;
 
-        const updateList=(id,events,msg,hasBadge)=>{
+        const updateList=(id,events,msg)=>{
             const c=$(id);
             c.innerHTML=events.length?events.map(e=>`
             <div class="list-item">
@@ -85,67 +85,80 @@
                         ${e.description || ''}
                     </div>
                 </div>
-                ${hasBadge ? `<div class="item-badge">${e.card_name || 'N/A'}</div>` : ''}
-                </div>
+            </div>
                 `).join('') : `<div class="empty-message">${msg}</div>`;
         };
 
         const updateButtons=()=>{
+            console.log(`🔄 Updating buttons: alarm=${alarmOn}, system=${systemOn}`);
             const btnAlarm=$('btn-alarm');
             const btnSystem=$('btn-system');
             if(alarmOn){
                 btnAlarm.classList.add('active');
                 btnAlarm.innerHTML='✅ Alarm ON';
+                console.log('✅ Alarm button: ON');
             }else{
                 btnAlarm.classList.remove('active');
                 btnAlarm.innerHTML='🔔 Activate Alarm';
+                console.log('🔔 Alarm button: OFF');
             }
             if(systemOn){
                 btnSystem.classList.remove('inactive');
                 btnSystem.innerHTML='⛔ Deactivate System';
+                console.log('⛔ System button: ON');
             }else{
                 btnSystem.classList.add('inactive');
                 btnSystem.innerHTML='✅ Activate System';
+                console.log('✅ System button: OFF');
             }
         };
 
         const loadStatus=()=>{
+            console.log('🔄 Loading status...');
             fetch('/api/status').then(r=>r.json()).then(data=>{
+                console.log('📥 Received status:', data);
                 alarmOn=data.alarm_on;
                 systemOn=data.system_on;
+                console.log(`📊 Updated: alarm=${alarmOn}, system=${systemOn}`);
                 updateButtons();
-            }).catch(e=>console.error('Status error:',e));
+            }).catch(e=>console.error('❌ Status error:',e));
         };
 
         const toggleAlarm=()=>{
             const newState=!alarmOn;
+            console.log(`🔔 Toggle alarm: ${alarmOn} → ${newState}`);
             fetch('/api/alarm',{
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({active:newState})
             }).then(r=>r.json()).then(data=>{
+                console.log('🔔 Alarm response:', data);
                 if(data.success){
                     alarmOn=data.alarm_on;
                     updateButtons();
                     alert(data.message);
+                    loadStatus();
                 }
-            }).catch(e=>console.error('Alarm error:',e));
+            }).catch(e=>console.error('❌ Alarm error:',e));
         };
 
         const toggleSystem=()=>{
             const newState=!systemOn;
+            console.log(`⚙️ Toggle system: ${systemOn} → ${newState}`);
             if(!newState&&!confirm('⚠️ Do you really want to deactivate the system?'))return;
             fetch('/api/system',{
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({active:newState})
             }).then(r=>r.json()).then(data=>{
+                console.log('⚙️ System response:', data);
                 if(data.success){
                     systemOn=data.system_on;
                     updateButtons();
                     alert(data.message);
+                    loadStatus();
                 }
-            }).catch(e=>console.error('System error:',e));
+            }).catch(e=>console.error('❌ System error:',e));
         };
 
         const refresh=()=>{
@@ -157,8 +170,8 @@
                 $('total').textContent=s.total_events||0;
                 $('intrusions').textContent=i.count||0;
                 $('rfid').textContent=r.count||0;
-                updateList('intrusions-list',i.events||[],'No intrusions detected',false);
-                updateList('rfid-list',r.events||[],'No RFID access',true);
+                updateList('intrusions-list',i.events||[],'No intrusions detected');
+                updateList('rfid-list',r.events||[],'No RFID access');
             }).catch(e=>console.error('Error:',e));
             loadStatus();
         };
