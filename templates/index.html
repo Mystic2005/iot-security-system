@@ -71,7 +71,23 @@
 
         const updateList=(id,events,msg,hasBadge)=>{
             const c=$(id);
-            c.innerHTML=events.length?events.map(e=>`<div class="list-item"><div><div class="item-name">${e.sensor_name}</div><div class="item-time">${e.timestamp}</div></div>${hasBadge?`<div class="item-badge">${e.card_name||'N/A'}</div>`:''}</div>`).join(''):`<div class="empty-message">${msg}</div>`;
+            c.innerHTML=events.length?events.map(e=>`
+            <div class="list-item">
+                <div>
+                    <div class="item-name">
+                        ${e.sensor_name}
+                        <span style="font-size:0.8em;color:#999;font-weight:normal;">
+                            [${e.from_source}]
+                        </span>
+                    </div>
+                    <div class="item-time">${e.timestamp}</div>
+                    <div style="font-size:0.8em;color:#888;">
+                        ${e.description || ''}
+                    </div>
+                </div>
+                ${hasBadge ? `<div class="item-badge">${e.card_name || 'N/A'}</div>` : ''}
+                </div>
+                `).join('') : `<div class="empty-message">${msg}</div>`;
         };
 
         const updateButtons=()=>{
@@ -135,8 +151,8 @@
         const refresh=()=>{
             Promise.all([
                 fetch('/api/stats').then(r=>r.json()),
-                fetch('/api/events?from=sensors').then(r=>r.json()),
-                fetch('/api/events?from=rfid').then(r=>r.json())
+                fetch('/api/events?from_source=sensors').then(r=>r.json()),
+                fetch('/api/events?from_source=rfid').then(r=>r.json())
             ]).then(([s,i,r])=>{
                 $('total').textContent=s.total_events||0;
                 $('intrusions').textContent=i.count||0;

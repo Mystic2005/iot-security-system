@@ -8,7 +8,7 @@ from gpiozero import MotionSensor, DistanceSensor, LED
 from mfrc522 import SimpleMFRC522
 from flask import Flask, request, jsonify
 
-state = {   
+state = {
     "armed": True,
     "motion": False,
     "motion_last": None,
@@ -48,8 +48,9 @@ def trigger_alarm(reason):
     led.on()
     description = get_description(reason)
     data = {
-        "time": state["alarm_since"],
-        "sensor": reason,
+        "timestamp": state["alarm_since"],
+        "sensor_name": reason,
+        "from_source": "sensors",
         "description": description
     }
     try:
@@ -80,7 +81,7 @@ def _thread_pir():
         state["motion_last"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         if state["armed"]:
             trigger_alarm("motion")
-        
+
         pir.wait_for_no_motion()
         state["motion"] = False
 
@@ -112,9 +113,9 @@ def _thread_rfid():
 
             # send rfid info
             data = {
-                "type": "rfid",
-                "time": state["rfid_last"],
-                "tag": "Grandma`s card"
+                "timestamp": state["rfid_last"],
+                "from_source": "rfid",
+                "card_name": "Grandma's card"
             }
             try:
                 requests.post(ALERT_URL, json=data, timeout=5)
@@ -198,4 +199,5 @@ def emergency_endpoint():
 # test local
 if __name__ == "__main__":
     start_sensors()
-    app.run(host='0.0.0.0', port=5001)
+    # For Raspberry Pi: change host to '0.0.0.0' for network access
+    app.run(host='127.0.0.1', port=5001, debug=False)

@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, render_template, request
+import requests
 from database import db
 
 app = Flask(__name__)
@@ -89,34 +90,49 @@ def index():
 # API ROUTES - EVENTS
 # ============================================================================
 
+@app.route('/api/alert', methods=['POST'])
+def add_alert_event():
+    data = request.get_json()
+
+    if not data:
+        return error_response("No data provided")
+
+    timestamp = data.get('timestamp')
+    sensor_name = data.get('sensor_name')
+    description = data.get('description')
+    from_source = data.get('from_source', 'sensors')
+
+    if not timestamp or not sensor_name:
+        return error_response("Missing required fields: timestamp, sensor_name")
+
+    event_id = db.add_event(
+        timestamp=timestamp,
+        sensor_name=sensor_name,
+        description=description,
+        from_source=from_source,
+        card_name=data.get('card_name')
+    )
+
+    return success_response(
+        data={'event_id': event_id},
+        message="Alert event added successfully",
+        status=201
+    )
+
 @app.route('/api/events', methods=['GET'])
 def get_events():
     limit = request.args.get('limit', type=int)
     sensor_name = request.args.get('sensor', type=str)
-    from_source = request.args.get('from', type=str)
+    from_source = request.args.get('from_source', type=str)
 
-    events = (db.get_events_by_sensor(sensor_name, limit) if sensor_name
-              else db.get_all_events(limit, from_source))
+    if sensor_name:
+        events = db.get_events_by_sensor(sensor_name, limit)
+    elif from_source:
+        events = db.get_all_events(limit, from_source)
+    else:
+        events = db.get_all_events(limit)
 
     return success_response(data={'count': len(events), 'events': events})
-
-
-@app.route('/api/sensors', methods=['POST'])
-def add_sensor_event():
-    return add_event_helper(
-        data=request.get_json(),
-        event_type='sensors',
-        required_fields=['timestamp', 'sensor_name']
-    )
-
-
-@app.route('/api/rfid', methods=['POST'])
-def add_rfid_event():
-    return add_event_helper(
-        data=request.get_json(),
-        event_type='rfid',
-        required_fields=['timestamp', 'sensor_name', 'card_name']
-    )
 
 
 # ============================================================================
@@ -149,7 +165,19 @@ def get_status():
 
 @app.route('/api/alarm', methods=['POST'])
 def set_alarm():
-    return toggle_state('alarm_on', 'Alarm')
+    response = toggle_state('alarm_on', 'Alarm')
+
+    # Propagate to hardware
+    try:
+        # system_state is updated inside toggle_state, so we check the new state
+        if system_state['alarm_on']:
+            requests.post('http://127.0.0.1:5001/arm', timeout=1)
+        else:
+            requests.post('http://127.0.0.1:5001/disarm', timeout=1)
+    except Exception as e:
+        print(f"Failed to communicate with security system: {e}")
+
+    return response
 
 
 @app.route('/api/system', methods=['POST'])

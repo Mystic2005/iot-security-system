@@ -12,16 +12,11 @@ echo "⚙️  Activating virtual environment..."
 source venv/bin/activate
 
 echo "📥 Checking dependencies..."
-pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org Flask==3.0.0 > /dev/null 2>&1
+pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 echo "
-🚀 Starting Flask server...
-✅ Server ready!
-
-🌐 Web interface: http://127.0.0.1:5000
-📡 REST API     : http://127.0.0.1:5000/api/
-
-📝 To stop the server: Ctrl+C
+Flask API: http://127.0.0.1:5000
+Security System API: http://127.0.0.1:5001
 "
 
-python api.py
+python api.py & python security_system.py
